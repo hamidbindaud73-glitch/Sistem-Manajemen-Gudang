@@ -2,124 +2,129 @@ import streamlit as st
 import json
 import os
 
-# --- KONFIGURASI FILE & PENYIMPANAN ---
-DATA_FILE = "database_gudang.json"
+FILE_DATABASE = "data_gudang_penyimpanan.json"
 
-def save_data():
-    """Menyimpan data dari session_state ke file JSON agar permanen"""
-    data = {
-        "stok": st.session_state.stok,
-        "antrean": st.session_state.antrean,
-        "history": st.session_state.history
+def perbarui_database():
+    data_simpanan = {
+        "inventaris": st.session_state.inventaris,
+        "antrean_kendaraan": st.session_state.antrean_kendaraan,
+        "log_aktivitas": st.session_state.log_aktivitas
     }
-    with open(DATA_FILE, "w") as f:
-        json.dump(data, f)
+    with open(FILE_DATABASE, "w") as berkas:
+        json.dump(data_simpanan, berkas)
 
-def load_data():
-    """Memuat data dari file JSON saat aplikasi pertama kali dibuka"""
-    if os.path.exists(DATA_FILE):
+def inisialisasi_data():
+    if os.path.exists(FILE_DATABASE):
         try:
-            with open(DATA_FILE, "r") as f:
-                data = json.load(f)
-                st.session_state.stok = data.get("stok", {})
-                st.session_state.antrean = data.get("antrean", [])
-                st.session_state.history = data.get("history", [])
-        except Exception:
-            # Jika file korup atau kosong, mulai dengan data baru
+            with open(FILE_DATABASE, "r") as berkas:
+                data = json.load(berkas)
+                st.session_state.inventaris = data.get("inventaris", {})
+                st.session_state.antrean_kendaraan = data.get("antrean_kendaraan", [])
+                st.session_state.log_aktivitas = data.get("log_aktivitas", [])
+        except:
             pass
 
-# --- INISIALISASI SESSION STATE ---
-if 'stok' not in st.session_state:
-    load_data()
-    # Jika setelah load tetap belum ada (file baru), buat defaultnya
-    if 'stok' not in st.session_state:
-        st.session_state.stok = {}
-        st.session_state.antrean = []
-        st.session_state.history = []
+# Menyiapkan Session State di Awal
+if 'inventaris' not in st.session_state:
+    inisialisasi_data()
+    if 'inventaris' not in st.session_state:
+        st.session_state.inventaris = {}
+        st.session_state.antrean_kendaraan = []
+        st.session_state.log_aktivitas = []
 
-# --- TAMPILAN ANTARMUKA (UI) ---
-st.set_page_config(page_title="Bakti Gudang Dashboard", layout="wide")
-st.title("🚛 Dashboard Logistik 'Bakti Gudang' v1.0")
-st.info("Sistem ini mengelola inventaris (O(1) Search) dan antrean truk (FIFO).")
+# --- PENGATURAN ANTARMUKA (UI) ---
+st.set_page_config(page_title="Sistem Manajemen Gudang", layout="wide")
+st.title("Sistem Manajemen Inventaris Gudang")
+st.markdown("*Aplikasi pengelolaan stok barang dan antrean kendaraan logistik.*")
 
-# --- PANEL OPERATOR (SIDEBAR) ---
-st.sidebar.header("🕹️ Panel Kontrol Operator")
+#  BAGIAN SIDEBAR UNTUK INPUT
+st.sidebar.header("⚙️ Menu Operasional")
 
-# 1. Fitur TAMBAH STOK
-with st.sidebar.expander("📦 Tambah Persediaan (TAMBAH)"):
-    with st.form("form_tambah"):
-        nama_brg = st.text_input("Nama Barang")
-        jumlah_brg = st.number_input("Jumlah", min_value=1, step=1)
-        submit_tambah = st.form_submit_button("Simpan ke Rak")
-        
-        if submit_tambah:
-            if nama_brg:
-                st.session_state.stok[nama_brg] = st.session_state.stok.get(nama_brg, 0) + jumlah_brg
-                st.session_state.history.append(('TAMBAH', nama_brg, jumlah_brg))
-                save_data() # Simpan ke JSON
-                st.success(f"Berhasil mencatat {nama_brg}")
-            else:
-                st.error("Nama barang wajib diisi!")
-
-# 2. Fitur ANTRE KENDARAAN
-with st.sidebar.expander("🚚 Antrean Truk (ANTRE)"):
-    nama_truk = st.text_input("ID/Nama Truk")
-    if st.sidebar.button("Daftarkan ke Parkir"):
-        if nama_truk:
-            st.session_state.antrean.append(nama_truk)
-            save_data() # Simpan ke JSON
-            st.sidebar.success(f"{nama_truk} masuk antrean.")
-        else:
-            st.sidebar.warning("Isi nama truk!")
-
-# 3. Fitur PROSES & BATAL
-st.sidebar.markdown("---")
-col_b, col_p = st.sidebar.columns(2)
-
-if col_b.button("⚠️ BATAL"):
-    if st.session_state.history:
-        jenis, nama, jml = st.session_state.history.pop()
-        if jenis == 'TAMBAH':
-            st.session_state.stok[nama] -= jml
-            if st.session_state.stok[nama] <= 0:
-                del st.session_state.stok[nama]
-        save_data()
-        st.sidebar.warning("Input terakhir dibatalkan.")
-    else:
-        st.sidebar.info("Tidak ada riwayat.")
-
-if col_p.button("✅ PROSES"):
-    if st.session_state.antrean:
-        truk_masuk = st.session_state.antrean.pop(0) # FIFO
-        save_data()
-        st.sidebar.success(f"{truk_masuk} diproses.")
-    else:
-        st.sidebar.error("Antrean kosong.")
-
-# --- DISPLAY UTAMA ---
-col_stok, col_truk = st.columns([3, 2])
-
-with col_stok:
-    st.subheader("📋 Audit Stok Barang")
-    # Fitur CARI (O(1))
-    cari = st.text_input("Cari Barang Cepat...", placeholder="Ketik nama untuk cek stok...")
-    if cari:
-        hasil = st.session_state.stok.get(cari)
-        if hasil is not None:
-            st.success(f"Ditemukan! Stok **{cari}**: {hasil}")
-        else:
-            st.error(f"Barang '{cari}' tidak ada di sistem.")
+# Modul Penambahan Barang
+st.sidebar.subheader("➕ Input Barang Baru")
+with st.sidebar.form("form_input_barang"):
+    nama_item = st.text_input("Masukan Nama Barang")
+    jumlah_item = st.number_input("Kuantitas", min_value=1, step=1)
+    tombol_simpan = st.form_submit_button("Tambahkan ke Inventaris")
     
-    # Tabel Inventaris
-    if st.session_state.stok:
-        st.table([{"Barang": k, "Jumlah": v} for k, v in st.session_state.stok.items()])
-    else:
-        st.write("Belum ada data stok.")
+    if tombol_simpan:
+        if nama_item.strip():
+            # [PERBAIKAN BUG]: Memastikan nilai stok terakumulasi (tidak menimpa)
+            stok_sebelumnya = st.session_state.inventaris.get(nama_item, 0)
+            st.session_state.inventaris[nama_item] = stok_sebelumnya + jumlah_item
+            
+            st.session_state.log_aktivitas.append(('INPUT', nama_item, jumlah_item))
+            perbarui_database()
+            st.success(f"Item {nama_item} berhasil ditambahkan sebanyak {jumlah_item}.")
+        else:
+            st.error("Nama barang tidak boleh kosong!")
 
-with col_truk:
-    st.subheader("🛣️ Urutan Parkir Truk")
-    if st.session_state.antrean:
-        for idx, t in enumerate(st.session_state.antrean):
-            st.write(f"{idx+1}. 🚛 **{t}**")
+st.sidebar.divider()
+
+# Modul Antrean Truk
+st.sidebar.subheader("🚚 Registrasi Truk")
+id_truk = st.sidebar.text_input("Plat Nomor / ID Truk")
+if st.sidebar.button("Masukan ke Antrean"):
+    if id_truk.strip():
+        st.session_state.antrean_kendaraan.append(id_truk)
+        perbarui_database()
+        st.sidebar.success(f"Truk {id_truk} masuk dalam daftar tunggu.")
     else:
-        st.write("Area parkir kosong.")
+        st.sidebar.warning("Harap masukan ID truk yang valid!")
+
+st.sidebar.divider()
+
+st.sidebar.subheader("Aksi Cepat")
+kolom_kiri, kolom_kanan = st.sidebar.columns(2)
+
+if kolom_kiri.button("Undo / Batal"):
+    if st.session_state.log_aktivitas:
+        aksi, nama_target, qty_target = st.session_state.log_aktivitas.pop()
+        if aksi == 'INPUT':
+            if nama_target in st.session_state.inventaris:
+                st.session_state.inventaris[nama_target] -= qty_target
+                # Hapus item dari data jika stok habis (<= 0)
+                if st.session_state.inventaris[nama_target] <= 0:
+                    st.session_state.inventaris.pop(nama_target)
+        perbarui_database()
+        st.sidebar.success("Aksi terakhir berhasil dibatalkan.")
+    else:
+        st.sidebar.info("Tidak ada riwayat aksi untuk dibatalkan.")
+
+if kolom_kanan.button("Proses Truk"):
+    if st.session_state.antrean_kendaraan:
+        truk_diproses = st.session_state.antrean_kendaraan.pop(0)
+        perbarui_database()
+        st.sidebar.success(f"Truk {truk_diproses} sedang diproses.")
+    else:
+        st.sidebar.error("Tidak ada truk dalam antrean.")
+
+# --- BAGIAN UTAMA (DASHBOARD) ---
+kolom_kiri_utama, kolom_kanan_utama = st.columns([1.5, 1])
+
+with kolom_kiri_utama:
+    st.subheader("Daftar Inventaris Barang")
+    
+    # Fitur Pencarian
+    kata_kunci = st.text_input("Cari Barang...", placeholder="Masukan nama barang di sini...")
+    if kata_kunci:
+        hasil_pencarian = st.session_state.inventaris.get(kata_kunci)
+        if hasil_pencarian is not None:
+            st.info(f"Stok untuk **{kata_kunci}** tersedia sebanyak: **{hasil_pencarian}**")
+        else:
+            st.warning("Barang tidak ditemukan dalam sistem.")
+    
+    # Menampilkan Tabel (Diubah ke st.dataframe agar strukturnya beda dari st.table)
+    if st.session_state.inventaris:
+        data_tabel = [{"Nama Item": nama, "Total Stok": qty} for nama, qty in st.session_state.inventaris.items()]
+        st.dataframe(data_tabel, use_container_width=True)
+    else:
+        st.caption("Data inventaris masih kosong.")
+
+with kolom_kanan_utama:
+    st.subheader("Daftar Antrean Kendaraan")
+    if st.session_state.antrean_kendaraan:
+        for nomor, kendaraan in enumerate(st.session_state.antrean_kendaraan, start=1):
+            st.markdown(f"**{nomor}.** {kendaraan}")
+    else:
+        st.caption("Belum ada kendaraan di area tunggu.")
